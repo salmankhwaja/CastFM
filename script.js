@@ -131,9 +131,13 @@ const CATALOG = {
     ]
   },
 
+  // `live`: after the hand-picked groups, these tabs also load stations live
+  // from the Radio Browser directory (same source as the Explore tab) — by
+  // country code or by language. See loadLiveRegion().
   india: {
     label: "India",
     flag: "🇮🇳",
+    live: { by: "country", value: "IN", title: "more Indian stations" },
     groups: [
       {
         name: "Bollywood",
@@ -147,6 +151,7 @@ const CATALOG = {
   singapore: {
     label: "Singapore",
     flag: "🇸🇬",
+    live: { by: "country", value: "SG", title: "more Singapore stations" },
     groups: [
       {
         name: "Oldies",
@@ -160,6 +165,7 @@ const CATALOG = {
   arabic: {
     label: "Arabic",
     flag: "🌙",
+    live: { by: "language", value: "arabic", title: "more Arabic-language stations, every country" },
     groups: [
       {
         name: "Mixed hits",
@@ -482,6 +488,8 @@ let exploreTitle = "";
 let exploreError = "";
 let exploreCurrent = null; // the Explore station loaded in the player, if any
 let exploreRequestId = 0; // drops stale responses when the user clicks fast
+let exploreQueue = []; // the list exploreCurrent was picked from (for prev/next)
+const liveRegions = {}; // regionId -> { status, stations, error } for CATALOG[...].live
 
 // ---------------------------------------------------------------------------
 // Rendering: region tabs
@@ -512,6 +520,7 @@ function buildRegionTabs() {
         mode = "radio";
         currentRegion = tab.id;
         localStorage.setItem(STORAGE_KEY_REGION, currentRegion);
+        loadLiveRegion(tab.id);
       }
       searchInput.value = "";
       renderList();
@@ -559,6 +568,8 @@ function renderList() {
       stationList.appendChild(buildStationRow(station));
     });
   });
+
+  if (region.live) renderLiveRegionGroup(currentRegion, query);
 
   if (stationList.children.length === 0) {
     stationList.appendChild(buildEmptyState("no stations match that search"));
@@ -878,6 +889,7 @@ function selectStation(id, { autoplay = false } = {}) {
   mode = "radio";
   currentRegion = regionId;
   currentStationId = id;
+  exploreCurrent = null;
   localStorage.setItem(STORAGE_KEY_STATION, id);
   localStorage.setItem(STORAGE_KEY_REGION, regionId);
 
@@ -910,6 +922,7 @@ function selectStation(id, { autoplay = false } = {}) {
 function selectPodcastEpisode(episode, showName, { autoplay = false } = {}) {
   mode = "podcast";
   currentStationId = null;
+  exploreCurrent = null;
   podcastCurrentEpisode = { ...episode, showName };
 
   progressWrap.hidden = false;
@@ -1107,11 +1120,11 @@ function buildExploreLinkRow(label, count, onClick) {
   return row;
 }
 
-function buildExploreStationRow(st) {
+function buildExploreStationRow(st, { queue = null, regionId = null } = {}) {
   const row = document.createElement("button");
   row.type = "button";
   row.className = "row";
-  row.classList.toggle("row-active", mode === "explore" && exploreCurrent && exploreCurrent.uuid === st.uuid);
+  row.classList.toggle("row-active", Boolean(exploreCurrent && exploreCurrent.uuid === st.uuid));
   row.classList.toggle("row-unverified", PAGE_IS_HTTPS && st.insecure);
 
   const dot = document.createElement("span");
@@ -1137,7 +1150,7 @@ function buildExploreStationRow(st) {
   row.appendChild(dot);
   row.appendChild(name);
   row.appendChild(tags);
-  row.addEventListener("click", () => selectExploreStation(st, { autoplay: true }));
+  row.addEventListener("click", () => selectExploreStation(st, { autoplay: true, queue, regionId }));
   return row;
 }
 
@@ -1213,10 +1226,67 @@ function renderExploreList(query) {
   }
 }
 
-function selectExploreStation(st, { autoplay = false } = {}) {
-  mode = "explore";
+// Live groups on curated tabs (India, Singapore, Arabic): the hand-picked
+// stations stay on top, then the tab pulls that country's / language's
+// stations from Radio Browser the first time it's opened.
+async function loadLiveRegion(regionId) {
+  const cfg = CATALOG[regionId] && CATALOG[regionId].live;
+  if (!cfg) return;
+  const state = liveRegions[regionId];
+  if (state && (state.status === "loading" || state.status === "loaded")) return;
+  liveRegions[regionId] = { status: "loading", stations: [], error: "" };
+  if (mode === "radio" && currentRegion === regionId) renderList();
+
+  const path = cfg.by === "language"
+    ? `/json/stations/bylanguageexact/${encodeURIComponent(cfg.value)}?${RB_LIST_PARAMS}`
+    : `/json/stations/bycountrycodeexact/${encodeURIComponent(cfg.value)}?${RB_LIST_PARAMS}`;
+  try {
+    const data = await rbFetch(path);
+    // Don't repeat a station already in the hand-picked groups above.
+    const curated = new Set(CATALOG[regionId].groups.flatMap((g) => g.stations.map((s) => s.stream)));
+    liveRegions[regionId] = { status: "loaded", stations: prepareStationList(data).filter((st) => !curated.has(st.url)), error: "" };
+  } catch (err) {
+    liveRegions[regionId] = { status: "error", stations: [], error: "couldn't reach the Radio Browser directory — switch tabs and back to retry" };
+  }
+  if (mode === "radio" && currentRegion === regionId) renderList();
+}
+
+function renderLiveRegionGroup(regionId, query) {
+  const cfg = CATALOG[regionId].live;
+  const state = liveRegions[regionId] || { status: "idle", stations: [] };
+  const heading = document.createElement("div");
+  heading.className = "group-heading";
+  heading.textContent = `# ${cfg.title} — live via Radio Browser`;
+
+  if (state.status === "loading" || state.status === "idle") {
+    if (query) return;
+    stationList.appendChild(heading);
+    stationList.appendChild(buildEmptyState("loading stations…"));
+    return;
+  }
+  if (state.status === "error") {
+    if (query) return;
+    stationList.appendChild(heading);
+    stationList.appendChild(buildEmptyState(state.error));
+    return;
+  }
+  const matches = state.stations.filter((st) =>
+    (st.name + " " + st.country + " " + st.tags.join(" ")).toLowerCase().includes(query)
+  );
+  if (!matches.length) return;
+  heading.textContent = `# ${cfg.title} (${matches.length}) — live via Radio Browser`;
+  stationList.appendChild(heading);
+  matches.forEach((st) => stationList.appendChild(buildExploreStationRow(st, { queue: state.stations, regionId })));
+}
+
+function selectExploreStation(st, { autoplay = false, queue = null, regionId = null } = {}) {
+  // regionId set = picked from a live group on a regular tab (India etc.):
+  // stay on that tab. Otherwise it came from the Explore tab.
+  mode = regionId ? "radio" : "explore";
+  if (regionId) currentRegion = regionId;
   currentStationId = null;
   exploreCurrent = st;
+  exploreQueue = queue || exploreStations;
 
   progressWrap.hidden = true;
   speedSwitcher.hidden = true;
@@ -1560,16 +1630,16 @@ if ("mediaSession" in navigator) {
 }
 
 function stepStation(delta) {
-  if (mode === "radio" && currentStationId) {
+  if (mode !== "podcast" && exploreCurrent && exploreQueue.length) {
+    const i = exploreQueue.findIndex((st) => st.uuid === exploreCurrent.uuid);
+    if (i === -1) return;
+    const next = exploreQueue[(i + delta + exploreQueue.length) % exploreQueue.length];
+    selectExploreStation(next, { autoplay: isPlaying, queue: exploreQueue, regionId: mode === "radio" ? currentRegion : null });
+  } else if (mode === "radio" && currentStationId) {
     const order = REGION_ORDER[currentRegion];
     const i = order.indexOf(currentStationId);
     const next = order[(i + delta + order.length) % order.length];
     selectStation(next, { autoplay: isPlaying });
-  } else if (mode === "explore" && exploreCurrent && exploreStations.length) {
-    const i = exploreStations.findIndex((st) => st.uuid === exploreCurrent.uuid);
-    if (i === -1) return;
-    const next = exploreStations[(i + delta + exploreStations.length) % exploreStations.length];
-    selectExploreStation(next, { autoplay: isPlaying });
   } else if (mode === "podcast" && podcastCurrentEpisode && podcastEpisodes.length) {
     // Steps through whichever show's episode list is currently loaded.
     const i = podcastEpisodes.findIndex((ep) => ep.url === podcastCurrentEpisode.url);
@@ -1849,4 +1919,5 @@ buildSpeedMenu();
   updateTabHighlight();
   updateSearchHint();
   selectStation(initialId, { autoplay: false });
+  loadLiveRegion(currentRegion);
 })();

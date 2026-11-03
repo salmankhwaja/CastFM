@@ -39,7 +39,10 @@ Zero-config static site:
   live from the free Radio Browser directory. Browse by country or genre,
   or type any station name + Enter to search worldwide. See "Explore world"
   below.
-- **India, Singapore, Arabic** — one flagship station each, as before.
+- **India, Singapore, Arabic** — the hand-picked station stays on top, then
+  each tab loads its full list live from Radio Browser: all Indian stations,
+  all Singapore stations, and every Arabic-language station worldwide (top
+  300 by listener votes each). See "Live groups" below.
 - **World tab** — 53 flagship stations across the Americas, Europe,
   Asia-Pacific, and Africa & the wider Middle East. **Unlike every other
   region in this app, none of these have been playback-tested yet** — see
@@ -116,6 +119,24 @@ copying anyone's database into this repo:
   useful. It's fire-and-forget and never affects playback.
 - **Mirrors:** requests try `all.api.radio-browser.info`, then the `de1`,
   `de2` and `fi1` mirrors, so one server being down doesn't break the tab.
+
+### Live groups on the India, Singapore and Arabic tabs
+
+These tabs used to hold one station each. Each now has a `live` setting in
+`CATALOG` (`script.js`):
+
+| Tab | Looks up | Radio Browser endpoint |
+|---|---|---|
+| 🇮🇳 India | country `IN` | `/json/stations/bycountrycodeexact/IN` |
+| 🇸🇬 Singapore | country `SG` | `/json/stations/bycountrycodeexact/SG` |
+| 🌙 Arabic | language `arabic`, any country | `/json/stations/bylanguageexact/arabic` |
+
+The list loads the first time you open the tab. It appears under the
+hand-picked stations as "# more … — live via Radio Browser", leaves out any
+stream already hand-picked above, and works with search and prev/next like
+the rest of the tab. To give another tab the same treatment, add
+`live: { by: "country", value: "XX", title: "…" }` (or
+`by: "language"`) to its `CATALOG` entry.
 
 **Why not Radio Garden?** Radio Garden has no public API. Its site runs on a
 private, undocumented one, and it actively manages licensing (e.g.
