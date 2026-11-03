@@ -1,6 +1,6 @@
 # Yaadon Ka Radio — Terminal FM
 
-A single-page, terminal-styled radio. Pick a region (or Podcasts), press play,
+A single-page, terminal-styled radio. Pick a region (or Explore world, or Podcasts), press play,
 keep working — it plays live public internet radio streams, plus a few
 on-demand podcast episodes, inside a black/red/blue/grey terminal UI.
 
@@ -30,9 +30,15 @@ Zero-config static site:
 
 ## What's in this build
 
-- **39 Pakistani stations** from your stream list, organized into four
-  groups: Popular & independent FM, PBC/Radio Pakistan's government FM+MW
-  network, Religious (Quran recitation stations), and Health & community.
+- **51 Pakistani stations**, organized into six groups: Popular &
+  independent FM, Karachi — local & community, Campus radio — Karachi,
+  PBC/Radio Pakistan's government FM+MW network, Religious, and Health &
+  community. The 11 Karachi additions are new (Nov 2026) — see "Karachi
+  stations" below.
+- **🔭 Explore world tab** — every country and ~50,000 stations, looked up
+  live from the free Radio Browser directory. Browse by country or genre,
+  or type any station name + Enter to search worldwide. See "Explore world"
+  below.
 - **India, Singapore, Arabic** — one flagship station each, as before.
 - **World tab** — 53 flagship stations across the Americas, Europe,
   Asia-Pacific, and Africa & the wider Middle East. **Unlike every other
@@ -61,6 +67,66 @@ Zero-config static site:
 - A gently drifting "listeners online" counter — ambience, not a real feed
 - **6 selectable color themes** — Terminal, Black, Red, Blue, Gray, White.
   See "Themes" below.
+
+## Karachi stations (added Nov 2026)
+
+Taken from Online Radio Box's Karachi listing
+(onlineradiobox.com/pk/Karachi). Of its 19 stations, 7 were already here
+(City FM 89, Radio1 FM 91, FM 100, Hot FM 105, Mera FM 107.4, FM 101
+Karachi, Radio Pak Filmi). The other 11 are new. Each stream address is the
+one Online Radio Box's own player uses, and **none have been playback-tested
+yet**, so they carry the red "unverified" tag until checked:
+
+| Station | Group | Note |
+|---|---|---|
+| Smile FM 88.6 | Karachi — local & community | |
+| Sindh Police FM 88.6 | Karachi — local & community | news/talk |
+| Radio Awaz FM 99 | Karachi — local & community | |
+| Dostii4ever FM 102 | Karachi — local & community | Zeno stream |
+| Mast FM 103 Karachi | Karachi — local & community | **listed address is a web page, not an audio stream — likely won't play** |
+| Radio Bakwas | Karachi — local & community | Zeno stream |
+| Life Style Radio | Karachi — local & community | |
+| CoastFunk Radio | Karachi — local & community | hip-hop |
+| SMI University FM 96.6 | Campus radio — Karachi | |
+| MAJU FM 97.6 | Campus radio — Karachi | plain `http://` — blocked on an `https://` page |
+| Faizan-e-Farz Uloom Course | Religious | plain `http://` — blocked on an `https://` page |
+
+## Explore world — every station, live from Radio Browser
+
+The **🔭 Explore world** tab gives you the whole world's radio without
+copying anyone's database into this repo:
+
+- **Source:** [Radio Browser](https://www.radio-browser.info), a free,
+  community-run directory of ~50,000 stations with an open public API built
+  for third-party players. It allows direct browser `fetch()` (CORS), so
+  there's still no backend.
+- **Browse:** "Most popular worldwide", 16 genres (news, talk, pop,
+  Bollywood, Islamic, Quran, classical, jazz…), and every country with its
+  station count. Each list shows the top 300 stations by listener votes.
+- **Search:** typing filters what's on screen; **Enter** searches station
+  names across the whole directory.
+- **Playback:** goes through the same player as every other tab, including
+  hls.js for HLS streams (Radio Browser flags these even when the URL
+  doesn't end in `.m3u8`). Prev/next media keys step through the open list.
+- **http:// streams:** on an `https://` site (GitHub Pages, Vercel) browsers
+  block plain `http://` audio, so those stations are sorted to the bottom
+  and marked with a red `http` tag.
+- **Etiquette:** each play sends Radio Browser's `/json/url/{id}` click
+  report, which they ask apps to do so their popularity ranking stays
+  useful. It's fire-and-forget and never affects playback.
+- **Mirrors:** requests try `all.api.radio-browser.info`, then the `de1`,
+  `de2` and `fi1` mirrors, so one server being down doesn't break the tab.
+
+**Why not Radio Garden?** Radio Garden has no public API. Its site runs on a
+private, undocumented one, and it actively manages licensing (e.g.
+geo-restrictions). Bulk-copying its catalogue, or building a front end on its
+private API, risks breaking its terms and could stop working without notice.
+Radio Browser covers the same idea, every station on Earth, through an API
+that's openly offered for exactly this use.
+
+Explore was tested against mocked API responses (the build sandbox can't
+reach radio-browser.info), so the first real check is opening the tab on
+the live site.
 
 ## World tab: unverified, read this before relying on it
 
@@ -296,13 +362,10 @@ Agreed direction for the next few rounds of work:
 - **Verify the 53 World-tab streams** in a real browser (blocked on device
   access when this batch shipped — see "World tab" above), drop/replace
   whatever fails
-- **A live "browse the globe" mode** on top of the curated World tab, using
-  Radio Garden's *unofficial* API (no official public API exists) — pending
-  a live CORS test to see whether its place/channel-listing endpoints can
-  be fetched directly from a browser on this app's own domain, or need a
-  one-time snapshot instead. Actual stream *playback* via their
-  `/api/ara/content/listen/{id}/channel.mp3` redirect endpoint should work
-  regardless of that answer, since `<audio>` doesn't need CORS for playback
+- **Playback-test the 11 new Karachi stations** and find a real stream
+  address for Mast FM 103
+- ~~A live "browse the globe" mode~~ — done as the **Explore world** tab,
+  using Radio Browser instead of Radio Garden (see "Explore world" above)
 - **Confirm World Podcasts' CORS support live** (see above) — once you've
   added your key, try it and let me know whether it loads or shows the
   "couldn't reach Podcast Index" message

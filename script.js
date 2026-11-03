@@ -35,6 +35,29 @@ const CATALOG = {
         ]
       },
       {
+        // Added Nov 2026 from Online Radio Box's Karachi list — the stations
+        // there that this catalog didn't already have. Stream addresses are
+        // the ones Online Radio Box's own player uses; none playback-tested yet.
+        name: "Karachi — local & community",
+        stations: [
+          { id: "smile886", name: "Smile FM 88.6", stream: "https://cc.vmakerhost.com/proxy/smile?mp=/live", verified: false, note: "added Nov 2026 — not yet playback-tested" },
+          { id: "sindhpolice886", name: "Sindh Police FM 88.6", stream: "https://sindhpolice-awazradionetwork.radioca.st/stream", verified: false, tag: "news", note: "added Nov 2026 — not yet playback-tested" },
+          { id: "awaz99", name: "Radio Awaz FM 99", stream: "https://karachifm99-awazradionetwork.radioca.st/stream", verified: false, note: "added Nov 2026 — not yet playback-tested" },
+          { id: "dostii4ever102", name: "Dostii4ever FM 102", stream: "https://stream.zeno.fm/srioe7d4q8uuv", verified: false, note: "added Nov 2026 — not yet playback-tested" },
+          { id: "mast103khi", name: "Mast FM 103 Karachi", stream: "https://mast103.com/karachi/", verified: false, note: "the only address listed is a web page, not an audio stream — likely won't play" },
+          { id: "radiobakwas", name: "Radio Bakwas", stream: "https://stream.zeno.fm/9htu0k0vsuquv", verified: false, note: "added Nov 2026 — not yet playback-tested" },
+          { id: "lifestyleradio", name: "Life Style Radio", stream: "https://cast6.asurahosting.com/proxy/lifestyleradio/stream", verified: false, note: "added Nov 2026 — not yet playback-tested" },
+          { id: "coastfunk", name: "CoastFunk Radio", stream: "https://coastfunk.com/listen/live/radio.mp3", verified: false, tag: "hip-hop", note: "added Nov 2026 — not yet playback-tested" }
+        ]
+      },
+      {
+        name: "Campus radio — Karachi",
+        stations: [
+          { id: "smiu966", name: "SMI University FM 96.6", stream: "https://s30.myradiostream.com/28364/listen.mp3", verified: false, note: "added Nov 2026 — not yet playback-tested" },
+          { id: "maju976", name: "MAJU FM 97.6", stream: "http://radio.maju.edu.pk:8000/stream", verified: false, note: "plain http:// — blocked on an https:// page by most browsers" }
+        ]
+      },
+      {
         name: "PBC — Radio Pakistan (govt. FM/MW network)",
         stations: [
           { id: "fm101isb", name: "FM 101 Islamabad", stream: "https://whmsonic.radio.gov.pk:7008/stream", verified: true },
@@ -67,7 +90,8 @@ const CATALOG = {
         stations: [
           { id: "sautulquran", name: "Saut-ul-Quran — PBC FM 93.4 Islamabad", stream: "https://whmsonic.radio.gov.pk:7002/stream?type=mp3&nocache=12", verified: true },
           { id: "loveislam", name: "Love Islam Radio", stream: "https://stream-52.zeno.fm/f9h69cgbu68uv", verified: true },
-          { id: "abdulbasit", name: "Abdul Basit Abdul Samad — Quran recitation", stream: "https://radio.mp3islam.com/listen/abdulbasit/radio.mp3", verified: true }
+          { id: "abdulbasit", name: "Abdul Basit Abdul Samad — Quran recitation", stream: "https://radio.mp3islam.com/listen/abdulbasit/radio.mp3", verified: true },
+          { id: "farzuloom", name: "Faizan-e-Farz Uloom Course (Karachi)", stream: "http://37.59.28.208:8740/FarzUloom", verified: false, note: "plain http:// — blocked on an https:// page by most browsers" }
         ]
       },
       {
@@ -447,11 +471,27 @@ let worldStatus = "idle"; // "idle" | "no-key" | "loading" | "loaded" | "error"
 let worldPodcasts = []; // shows from Podcast Index: {name, artist, feedUrl, genre}
 let worldError = "";
 
+// Explore tab — the whole world's stations, looked up live from the free
+// community Radio Browser directory (radio-browser.info) instead of being
+// hardcoded. See the "Explore" section further down.
+let exploreView = "home"; // "home" (countries + genres) | "stations"
+let exploreStatus = "idle"; // "idle" | "loading" | "loaded" | "error"
+let exploreCountries = []; // [{name, code, count}]
+let exploreStations = []; // normalized station list for the current view
+let exploreTitle = "";
+let exploreError = "";
+let exploreCurrent = null; // the Explore station loaded in the player, if any
+let exploreRequestId = 0; // drops stale responses when the user clicks fast
+
 // ---------------------------------------------------------------------------
 // Rendering: region tabs
 // ---------------------------------------------------------------------------
 function buildRegionTabs() {
-  const tabs = [...REGION_IDS.map((id) => ({ id, label: `${CATALOG[id].flag} ${CATALOG[id].label}` })), { id: "podcasts", label: "🎙 Podcasts" }];
+  const tabs = [
+    ...REGION_IDS.map((id) => ({ id, label: `${CATALOG[id].flag} ${CATALOG[id].label}` })),
+    { id: "explore", label: "🔭 Explore world" },
+    { id: "podcasts", label: "🎙 Podcasts" }
+  ];
 
   tabs.forEach((tab) => {
     const btn = document.createElement("button");
@@ -460,7 +500,10 @@ function buildRegionTabs() {
     btn.dataset.tab = tab.id;
     btn.textContent = tab.label;
     btn.addEventListener("click", () => {
-      if (tab.id === "podcasts") {
+      if (tab.id === "explore") {
+        mode = "explore";
+        if (exploreCountries.length === 0 && exploreStatus !== "loading") loadExploreHome();
+      } else if (tab.id === "podcasts") {
         mode = "podcast";
         podcastView = "library";
         podcastActiveShow = null;
@@ -480,7 +523,7 @@ function buildRegionTabs() {
 }
 
 function updateTabHighlight() {
-  const activeId = mode === "podcast" ? "podcasts" : currentRegion;
+  const activeId = mode === "podcast" ? "podcasts" : mode === "explore" ? "explore" : currentRegion;
   regionTabs.querySelectorAll(".tab").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.tab === activeId);
   });
@@ -495,6 +538,10 @@ function renderList() {
 
   if (mode === "podcast") {
     renderPodcastList(query);
+    return;
+  }
+  if (mode === "explore") {
+    renderExploreList(query);
     return;
   }
 
@@ -788,14 +835,15 @@ function isHlsUrl(url) {
   return /\.m3u8(\?|$)/i.test(url);
 }
 
-function loadAudioSource(url) {
+function loadAudioSource(url, { forceHls = false } = {}) {
   if (hls) {
     hls.destroy();
     hls = null;
   }
   audio.removeAttribute("src");
 
-  if (isHlsUrl(url)) {
+  // forceHls: Radio Browser flags HLS streams whose URL doesn't end in .m3u8.
+  if (forceHls || isHlsUrl(url)) {
     if (window.Hls && window.Hls.isSupported()) {
       hls = new window.Hls();
       hls.on(window.Hls.Events.ERROR, (_evt, data) => {
@@ -884,6 +932,318 @@ function selectPodcastEpisode(episode, showName, { autoplay = false } = {}) {
   } else {
     setPlayingState(false);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Explore — every station in the world, live from Radio Browser
+// ---------------------------------------------------------------------------
+// Radio Browser (radio-browser.info) is a free, community-run, openly
+// licensed directory of ~50,000 stations with a public JSON API built for
+// apps like this one, and it allows direct browser fetch() (CORS). Nothing
+// is copied into this repo: countries, genres and station lists are looked
+// up when the user opens them. Radio Browser runs several mirrors — try
+// them in turn so one being down doesn't break the tab.
+const RB_HOSTS = [
+  "https://all.api.radio-browser.info",
+  "https://de1.api.radio-browser.info",
+  "https://de2.api.radio-browser.info",
+  "https://fi1.api.radio-browser.info"
+];
+const EXPLORE_LIMIT = 300;
+const EXPLORE_GENRES = [
+  ["news", "📰 News"], ["talk", "🗣 Talk"], ["pop", "🎤 Pop"], ["rock", "🎸 Rock"],
+  ["classical", "🎻 Classical"], ["jazz", "🎷 Jazz"], ["bollywood", "🎬 Bollywood"],
+  ["islamic", "🕌 Islamic"], ["quran", "📖 Quran"], ["oldies", "📻 Oldies"],
+  ["electronic", "🎛 Electronic"], ["hip hop", "🎧 Hip hop"], ["country", "🤠 Country"],
+  ["sports", "⚽ Sports"], ["chillout", "🌙 Chillout"], ["world music", "🌍 World music"]
+];
+const PAGE_IS_HTTPS = location.protocol === "https:";
+
+async function rbFetch(path) {
+  let lastError = null;
+  for (const host of RB_HOSTS) {
+    try {
+      const res = await fetch(host + path, { headers: { Accept: "application/json" } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError || new Error("no Radio Browser server reachable");
+}
+
+function countryFlag(code) {
+  if (!code || !/^[A-Za-z]{2}$/.test(code)) return "🌐";
+  return String.fromCodePoint(...[...code.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
+}
+
+function normalizeRbStation(s) {
+  const url = (s.url_resolved || s.url || "").trim();
+  return {
+    uuid: s.stationuuid,
+    name: (s.name || "").trim() || "Unnamed station",
+    url,
+    country: s.country || "",
+    code: s.countrycode || "",
+    tags: (s.tags || "").split(",").map((t) => t.trim()).filter(Boolean).slice(0, 2),
+    hls: s.hls === 1 || s.hls === true,
+    insecure: url.startsWith("http://")
+  };
+}
+
+function prepareStationList(raw) {
+  const seen = new Set();
+  const list = [];
+  raw.map(normalizeRbStation).forEach((st) => {
+    if (!st.url || seen.has(st.url)) return;
+    seen.add(st.url);
+    list.push(st);
+  });
+  // On an https:// page, browsers block plain http:// streams — list the
+  // ones that can actually play first (order is otherwise most-voted first).
+  if (PAGE_IS_HTTPS) list.sort((a, b) => Number(a.insecure) - Number(b.insecure));
+  return list;
+}
+
+async function loadExploreHome() {
+  const req = ++exploreRequestId;
+  exploreView = "home";
+  exploreStatus = "loading";
+  if (mode === "explore") renderList();
+  try {
+    const data = await rbFetch("/json/countries?order=stationcount&reverse=true&hidebroken=true");
+    if (req !== exploreRequestId) return;
+    exploreCountries = data
+      .filter((c) => c.stationcount > 0 && c.name)
+      .map((c) => ({ name: c.name, code: c.iso_3166_1 || c.countrycode || "", count: c.stationcount }));
+    exploreStatus = "loaded";
+  } catch (err) {
+    if (req !== exploreRequestId) return;
+    exploreStatus = "error";
+    exploreError = "couldn't reach the Radio Browser directory — check your connection and try the tab again";
+  }
+  if (mode === "explore") {
+    renderList();
+    updateSearchHint();
+  }
+}
+
+async function openExploreList(title, path) {
+  const req = ++exploreRequestId;
+  exploreView = "stations";
+  exploreTitle = title;
+  exploreStatus = "loading";
+  exploreStations = [];
+  searchInput.value = "";
+  renderList();
+  updateSearchHint();
+  try {
+    const data = await rbFetch(path);
+    if (req !== exploreRequestId) return;
+    exploreStations = prepareStationList(data);
+    exploreStatus = "loaded";
+  } catch (err) {
+    if (req !== exploreRequestId) return;
+    exploreStatus = "error";
+    exploreError = "couldn't load stations from Radio Browser — try again in a moment";
+  }
+  if (mode === "explore") renderList();
+}
+
+const RB_LIST_PARAMS = `hidebroken=true&order=votes&reverse=true&limit=${EXPLORE_LIMIT}`;
+
+function openExploreCountry(country) {
+  openExploreList(
+    `${countryFlag(country.code)} ${country.name}`,
+    `/json/stations/bycountrycodeexact/${encodeURIComponent(country.code)}?${RB_LIST_PARAMS}`
+  );
+}
+
+function openExploreGenre(tag, label) {
+  openExploreList(label, `/json/stations/bytagexact/${encodeURIComponent(tag)}?${RB_LIST_PARAMS}`);
+}
+
+function openExploreTop() {
+  openExploreList("🔥 Most popular worldwide", `/json/stations/search?${RB_LIST_PARAMS}`);
+}
+
+function doExploreSearch(term) {
+  if (!term) {
+    loadExploreHome();
+    return;
+  }
+  openExploreList(`🔎 “${term}” — worldwide`, `/json/stations/search?name=${encodeURIComponent(term)}&${RB_LIST_PARAMS}`);
+}
+
+function exploreHeading(text) {
+  const heading = document.createElement("div");
+  heading.className = "group-heading";
+  heading.textContent = text;
+  stationList.appendChild(heading);
+}
+
+function buildExploreLinkRow(label, count, onClick) {
+  const row = document.createElement("button");
+  row.type = "button";
+  row.className = "row";
+  const dot = document.createElement("span");
+  dot.className = "row-dot";
+  const name = document.createElement("span");
+  name.className = "row-name";
+  name.textContent = label;
+  const tags = document.createElement("span");
+  tags.className = "row-tags";
+  if (count) {
+    const t = document.createElement("span");
+    t.className = "tag tag-grey";
+    t.textContent = `${count.toLocaleString()} stations`;
+    tags.appendChild(t);
+  }
+  row.appendChild(dot);
+  row.appendChild(name);
+  row.appendChild(tags);
+  row.addEventListener("click", onClick);
+  return row;
+}
+
+function buildExploreStationRow(st) {
+  const row = document.createElement("button");
+  row.type = "button";
+  row.className = "row";
+  row.classList.toggle("row-active", mode === "explore" && exploreCurrent && exploreCurrent.uuid === st.uuid);
+  row.classList.toggle("row-unverified", PAGE_IS_HTTPS && st.insecure);
+
+  const dot = document.createElement("span");
+  dot.className = "row-dot";
+  const name = document.createElement("span");
+  name.className = "row-name";
+  name.textContent = `${countryFlag(st.code)} ${st.name}`;
+  const tags = document.createElement("span");
+  tags.className = "row-tags";
+  st.tags.forEach((tag) => {
+    const t = document.createElement("span");
+    t.className = "tag tag-grey";
+    t.textContent = tag;
+    tags.appendChild(t);
+  });
+  if (PAGE_IS_HTTPS && st.insecure) {
+    const t = document.createElement("span");
+    t.className = "tag tag-red";
+    t.textContent = "http";
+    t.title = "plain http:// stream — most browsers block it on an https:// page";
+    tags.appendChild(t);
+  }
+  row.appendChild(dot);
+  row.appendChild(name);
+  row.appendChild(tags);
+  row.addEventListener("click", () => selectExploreStation(st, { autoplay: true }));
+  return row;
+}
+
+function renderExploreList(query) {
+  if (exploreView === "stations") {
+    const back = document.createElement("button");
+    back.type = "button";
+    back.className = "row row-back";
+    back.textContent = "← back to countries & genres";
+    back.addEventListener("click", () => {
+      exploreRequestId++;
+      exploreView = "home";
+      exploreStatus = exploreCountries.length ? "loaded" : "idle";
+      searchInput.value = "";
+      if (!exploreCountries.length) loadExploreHome();
+      renderList();
+      updateSearchHint();
+    });
+    stationList.appendChild(back);
+    exploreHeading(`# ${exploreTitle}`);
+
+    if (exploreStatus === "loading") {
+      stationList.appendChild(buildEmptyState("looking up stations on Radio Browser…"));
+      return;
+    }
+    if (exploreStatus === "error") {
+      stationList.appendChild(buildEmptyState(exploreError));
+      return;
+    }
+    const matches = exploreStations.filter((st) =>
+      (st.name + " " + st.country + " " + st.tags.join(" ")).toLowerCase().includes(query)
+    );
+    matches.forEach((st) => stationList.appendChild(buildExploreStationRow(st)));
+    if (exploreStations.length === 0) {
+      stationList.appendChild(buildEmptyState("no stations found"));
+    } else if (matches.length === 0) {
+      stationList.appendChild(buildEmptyState("nothing in this list matches — press Enter to search every station worldwide"));
+    }
+    return;
+  }
+
+  // Home: popular + genres + every country
+  if (exploreStatus === "loading") {
+    stationList.appendChild(buildEmptyState("loading the world's radio directory…"));
+    return;
+  }
+  if (exploreStatus === "error") {
+    stationList.appendChild(buildEmptyState(exploreError));
+    return;
+  }
+
+  if (!query) {
+    exploreHeading("# start here");
+    stationList.appendChild(buildExploreLinkRow("🔥 Most popular worldwide", 0, openExploreTop));
+  }
+
+  const genres = EXPLORE_GENRES.filter(([tag, label]) => (tag + " " + label).toLowerCase().includes(query));
+  if (genres.length) {
+    exploreHeading("# genres");
+    genres.forEach(([tag, label]) => stationList.appendChild(buildExploreLinkRow(label, 0, () => openExploreGenre(tag, label))));
+  }
+
+  const countries = exploreCountries.filter((c) => c.name.toLowerCase().includes(query));
+  if (countries.length) {
+    exploreHeading(`# countries (${countries.length})`);
+    countries.forEach((c) =>
+      stationList.appendChild(buildExploreLinkRow(`${countryFlag(c.code)} ${c.name}`, c.count, () => openExploreCountry(c)))
+    );
+  }
+
+  if (stationList.children.length === 0) {
+    stationList.appendChild(buildEmptyState("no country or genre matches — press Enter to search station names worldwide"));
+  }
+}
+
+function selectExploreStation(st, { autoplay = false } = {}) {
+  mode = "explore";
+  currentStationId = null;
+  exploreCurrent = st;
+
+  progressWrap.hidden = true;
+  speedSwitcher.hidden = true;
+  liveTag.hidden = false;
+  npFlag.textContent = countryFlag(st.code);
+  npStation.textContent = st.name;
+  playerTitle.textContent = st.name;
+  const sub = [st.country, st.tags[0]].filter(Boolean).join(" · ");
+  playerSub.textContent = sub ? `${sub} · via Radio Browser` : "via Radio Browser";
+  npStatus.textContent = autoplay ? "connecting…" : "press play to tune in";
+
+  updateMediaSessionMetadata(st.name, st.country || "Explore world");
+  renderList();
+  updateTabHighlight();
+
+  audio.pause();
+  loadAudioSource(st.url, { forceHls: st.hls });
+  audio.playbackRate = 1;
+  if (autoplay) {
+    tunePlay();
+  } else {
+    setPlayingState(false);
+  }
+
+  // Radio Browser asks apps to report plays so its popularity ranking stays
+  // useful. Fire-and-forget; a failure here never affects playback.
+  if (st.uuid) rbFetch(`/json/url/${encodeURIComponent(st.uuid)}`).catch(() => {});
 }
 
 // ---------------------------------------------------------------------------
@@ -1060,6 +1420,12 @@ function parseRssEpisodes(xmlText) {
 }
 
 function updateSearchHint() {
+  if (mode === "explore") {
+    searchHint.textContent = exploreView === "stations"
+      ? "filtering this list — press Enter to search station names worldwide"
+      : "filtering countries & genres — type a station name + Enter to search ~50,000 stations worldwide";
+    return;
+  }
   if (mode !== "podcast") {
     searchHint.textContent = "";
     return;
@@ -1154,6 +1520,11 @@ playBtn.addEventListener("click", togglePlay);
 searchInput.addEventListener("input", renderList);
 searchInput.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
+  if (mode === "explore") {
+    e.preventDefault();
+    doExploreSearch(searchInput.value.trim());
+    return;
+  }
   if (mode !== "podcast") return;
   if (podcastView === "episodes" || podcastView === "loading-episodes" || podcastView === "world") return;
   e.preventDefault();
@@ -1194,6 +1565,11 @@ function stepStation(delta) {
     const i = order.indexOf(currentStationId);
     const next = order[(i + delta + order.length) % order.length];
     selectStation(next, { autoplay: isPlaying });
+  } else if (mode === "explore" && exploreCurrent && exploreStations.length) {
+    const i = exploreStations.findIndex((st) => st.uuid === exploreCurrent.uuid);
+    if (i === -1) return;
+    const next = exploreStations[(i + delta + exploreStations.length) % exploreStations.length];
+    selectExploreStation(next, { autoplay: isPlaying });
   } else if (mode === "podcast" && podcastCurrentEpisode && podcastEpisodes.length) {
     // Steps through whichever show's episode list is currently loaded.
     const i = podcastEpisodes.findIndex((ep) => ep.url === podcastCurrentEpisode.url);
