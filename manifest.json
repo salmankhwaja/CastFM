@@ -1,6 +1,6 @@
 {
-  "name": "Yaadon Ka Radio — Terminal FM",
-  "short_name": "Yaadon Ka Radio",
+  "name": "CastFM — radio & podcasts",
+  "short_name": "CastFM",
   "description": "Tune into Pakistani, Indian, Singaporean and Arabic radio, plus podcasts, from one terminal-styled dial.",
   "start_url": ".",
   "display": "standalone",

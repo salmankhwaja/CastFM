@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Yaadon Ka Radio — station & podcast catalog
+// CastFM (formerly Yaadon Ka Radio) — station & podcast catalog
 // ---------------------------------------------------------------------------
 // Every `stream` is a live public internet radio stream, played back directly
 // in an <audio> tag — this app doesn't host or distribute any audio files.
@@ -382,6 +382,9 @@ REGION_IDS.forEach((regionId) => {
   });
 });
 
+// Storage keys keep the old "ykr_" (Yaadon Ka Radio) prefix on purpose:
+// renaming them would wipe every visitor's saved theme, volume, station and
+// Podcast Index key.
 const STORAGE_KEY_REGION = "ykr_region";
 const STORAGE_KEY_STATION = "ykr_station";
 const STORAGE_KEY_VOLUME = "ykr_volume";
@@ -1516,7 +1519,7 @@ function updateMediaSessionMetadata(title, subtitle) {
   navigator.mediaSession.metadata = new MediaMetadata({
     title,
     artist: subtitle,
-    album: "Yaadon Ka Radio"
+    album: "CastFM"
   });
 }
 

@@ -1,4 +1,4 @@
-# Yaadon Ka Radio — Terminal FM
+# CastFM — radio & podcasts, terminal style
 
 A single-page, terminal-styled radio. Pick a region (or Explore world, or Podcasts), press play,
 keep working — it plays live public internet radio streams, plus a few
